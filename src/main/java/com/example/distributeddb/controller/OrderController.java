@@ -16,7 +16,7 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<Order> createOrder(@RequestBody Order order) {
-        Order createdOrder = orderService.createOrder(order);
+        Order createdOrder = orderService.createOrderWithConsensus(order);
         return ResponseEntity.ok(createdOrder);
     }
 
