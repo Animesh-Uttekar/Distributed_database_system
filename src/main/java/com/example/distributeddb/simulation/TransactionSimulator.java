@@ -1,10 +1,14 @@
 package com.example.distributeddb.simulation;
 
-import com.example.distributeddb.model.Order;
-import com.example.distributeddb.service.OrderService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,11 +18,10 @@ import java.util.concurrent.atomic.LongAdder;
 @Component
 public class TransactionSimulator implements CommandLineRunner {
 
-    private final OrderService orderService;
+    @Value("${node.urls}")
+    private String[] nodeUrls;
 
-    public TransactionSimulator(OrderService orderService) {
-        this.orderService = orderService;
-    }
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Override
     public void run(String... args) throws Exception {
@@ -44,23 +47,35 @@ public class TransactionSimulator implements CommandLineRunner {
         for (int i = 0; i < totalTransactions; i++) {
             long customerId = i % 100;
             double amount = Math.random() * 100;
-            Order order = new Order(customerId, amount);
 
+            String targetNodeUrl = nodeUrls[i % nodeUrls.length];
+            if (!useConsensus) {
+                targetNodeUrl += (targetNodeUrl.contains("?") ? "&" : "?") + "mode=direct";
+            }
+            String jsonPayload = String.format("{\"customerId\": %d, \"amount\": %.2f}", customerId, amount);
+            String finalTargetNodeUrl = targetNodeUrl;
             executor.submit(() -> {
-                long start = System.nanoTime();
+                long startTime = System.nanoTime();
                 try {
-                    if (useConsensus) {
-                        orderService.createOrderWithConsensus(order);
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(finalTargetNodeUrl))
+                            .header("Content-Type", "application/json")
+                            .timeout(Duration.ofSeconds(5))
+                            .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    if (response.statusCode() == 200) {
+                        successCounter.incrementAndGet();
                     } else {
-                        orderService.createOrderWithoutConsensus(order);
+                        errorCounter.incrementAndGet();
                     }
-                    successCounter.incrementAndGet();
                 } catch (Exception e) {
                     System.err.println("Transaction error: " + e.getMessage());
                     errorCounter.incrementAndGet();
                 } finally {
-                    long elapsed = System.nanoTime() - start;
-                    totalLatencyNanos.add(elapsed);
+                    long elapsedNanos = System.nanoTime() - startTime;
+                    totalLatencyNanos.add(elapsedNanos);
                     latch.countDown();
                 }
             });
@@ -68,17 +83,18 @@ public class TransactionSimulator implements CommandLineRunner {
 
         latch.await();
         executor.shutdown();
+
         long simulationEnd = System.currentTimeMillis();
         long totalTimeMs = simulationEnd - simulationStart;
-        double avgLatencyMs = (totalLatencyNanos.doubleValue() / totalTransactions) / 1000000.0;
+        double avgLatencyMs = (totalLatencyNanos.doubleValue() / totalTransactions) / 100000.0;
         double throughput = (totalTransactions * 1000.0) / totalTimeMs;
 
         System.out.println("Simulation (" + label + ") complete:");
         System.out.println("  Total transactions: " + totalTransactions);
         System.out.println("  Total time: " + totalTimeMs + " ms");
-        System.out.println("  Avg latency per transaction: " + avgLatencyMs + " ms");
+        System.out.println("  Average latency per transaction: " + avgLatencyMs + " ms");
         System.out.println("  Throughput: " + throughput + " tx/sec");
-        System.out.println("  Successes: " + successCounter.get() + ", Errors: " + errorCounter.get());
-        System.out.println("-----------------------------------------------------");
+        System.out.println("  Successful transactions: " + successCounter.get() +
+                ", Failed transactions: " + errorCounter.get());
     }
 }

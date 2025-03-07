@@ -15,8 +15,14 @@ public class OrderController {
     private OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
-        Order createdOrder = orderService.createOrderWithConsensus(order);
+    public ResponseEntity<Order> createOrder(@RequestBody Order order,
+                                             @RequestParam(defaultValue = "consensus") String mode) {
+        Order createdOrder;
+        if ("direct".equalsIgnoreCase(mode)) {
+            createdOrder = orderService.createOrderWithoutConsensus(order);
+        } else {
+            createdOrder = orderService.createOrderWithConsensus(order);
+        }
         return ResponseEntity.ok(createdOrder);
     }
 
