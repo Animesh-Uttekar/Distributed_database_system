@@ -56,7 +56,23 @@ GRANT ALL PRIVILEGES ON distributed_db.* TO 'yourUser@localhost';
 FLUSH PRIVILEGES;
 ```
 
-### Step 3: Build the Project Jar
+### Step 3: Configure Properties
+
+Update `application.properties` in `src/main/resources`:
+
+```
+server.port=${SERVER_PORT:8084}
+raft.node.id=${RAFT_NODE_ID:n1}
+raft.peers=${RAFT_PEERS:n1,n2,n3}
+spring.application.name=distributeddb
+spring.datasource.url=jdbc:mysql://localhost:3306/distributed_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+spring.datasource.username=yourUser
+spring.datasource.password=yourPassword
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+node.urls=${NODE_URLS:http://localhost:8084/orders}
+```
+
+### Step 4: Build the Project Jar
 
 Navigate to project root directory and run:
 
@@ -65,24 +81,11 @@ Navigate to project root directory and run:
 
 ```
 
-### Step 4: Configure Local Properties
-
-Create `application-local.properties` in `src/main/resources`:
-
-```
-server.port=8084
-raft.node.id=n1
-spring.datasource.url=jdbc:mysql://localhost:3306/distributed_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-spring.datasource.username=yourUser
-spring.datasource.password=yourPassword
-node.urls=http://localhost:8084/orders
-```
-
 ### Step 5: Run the Application Locally (with simulation)
 
-Run the Spring Boot application with the local profile activated:
+Run the Spring Boot application:
 ```
-java -Dspring.profiles.active=local -jar build/libs/distributeddb-0.0.1-SNAPSHOT.jar simulate
+./gradlew bootRun
 
 ```
 
@@ -92,13 +95,29 @@ java -Dspring.profiles.active=local -jar build/libs/distributeddb-0.0.1-SNAPSHOT
 
 ## Running with Docker Compose (Multiple Nodes)
 
-### Step 1: Build the Jar File
+### Step 1: Configure Prod Properties
+
+Create `application-prod.properties` in `src/main/resources`:
+
+```
+server.port=${SERVER_PORT:8084}
+raft.node.id=${RAFT_NODE_ID:n1}
+raft.peers=${RAFT_PEERS:n1,n2,n3}
+spring.application.name=distributeddb
+spring.datasource.url=jdbc:mysql://mysql:3306/distributed_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+spring.datasource.username=yourUser
+spring.datasource.password=yourPassword
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+node.urls=${NODE_URLS:http://node1:8081/orders,http://node2:8082/orders,http://node3:8083/orders}
+```
+
+### Step 2: Build the Jar File
 ```
 ./gradlew clean build
 
 ```
 
-### Step 2: Start Docker Compose Environment
+### Step 3: Start Docker Compose Environment
 
 Launch all services (MySQL + nodes):
 
@@ -110,8 +129,8 @@ docker-compose up --build
 This command starts:
 
 - MySQL container on port `3306`
-- Node containers (`node1`:`8081`, `node2`:`8082`, `node3`:`8083`, `node5`:`8085`)
-- Simulator container (`simulator`:`8084`) (node4) running simulations
+- Node containers (`node1`:`8081`, `node2`:`8082`, `node3`:`8083`)
+- Simulator container (`simulator`:`8084`) running simulations
 
 
 ---
@@ -139,5 +158,5 @@ This command starts:
 ## Troubleshooting
 
 - Restart MySQL service before node initialization
-- Check port availability (8080-8085)
+- Check port availability (8080-8084)
 - Verify environment variables in application.properties
